@@ -24,7 +24,7 @@ This service demonstrates:
 
 ```bash
 # Clone or navigate to the project directory
-cd otel_demo
+cd open_telemetry_ml_api
 
 # Create virtual environment and install dependencies
 uv venv
@@ -36,13 +36,13 @@ uv pip install -r requirements.txt
 
 ```bash
 # Set PYTHONPATH and start the server
-PYTHONPATH=/home/ronik/otel_demo python app/main.py
+PYTHONPATH=/home/ronik/Desktop/open_telemetry_ml_api python app/main.py
 ```
 
 Or using uvicorn directly:
 
 ```bash
-PYTHONPATH=/home/ronik/otel_demo uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+PYTHONPATH=/home/ronik/Desktop/open_telemetry_ml_api uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 You should see output like:
@@ -50,7 +50,7 @@ You should see output like:
 ```
 INFO:app.main:Starting Search & Recommendation Service v1.0.0
 INFO:app.main:Initializing database...
-INFO:app.main:Database ready at: /home/ronik/otel_demo/app/data/search.db
+INFO:app.main:Database ready at: /home/ronik/open_telemetry_ml_api/app/data/search.db
 INFO:app.main:Environment: development
 INFO:app.main:Chaos config: model_failure=0.05, external_timeout=0.1
 INFO:     Application startup complete.
@@ -287,7 +287,7 @@ WEIGHT_EXTERNAL=0.2
 ## Project Structure
 
 ```
-otel_demo/
+open_telemetry_ml_api/
 ├── app/
 │   ├── api/            # API route handlers
 │   ├── core/           # Core business logic (parser, ranker, chaos)
@@ -333,7 +333,7 @@ WIKIPEDIA_TIMEOUT=5.0
 
 Make sure to set PYTHONPATH:
 ```bash
-export PYTHONPATH=/path/to/otel_demo
+export PYTHONPATH=/path/to/open_telemetry_ml_api
 python app/main.py
 ```
 
@@ -487,14 +487,14 @@ Open your browser to `http://localhost:8080`
 
 **Stop SigNoz:**
 ```bash
-cd signoz/deploy/
-docker compose -f docker/clickhouse-setup/docker-compose.yaml stop
+cd ~/Desktop/signoz/
+docker compose -f docker/docker-compose.yaml stop
 ```
 
 **Start SigNoz again:**
 ```bash
-cd signoz/deploy/
-docker compose -f docker/clickhouse-setup/docker-compose.yaml start
+cd ~/Desktop/signoz/
+docker compose -f docker/docker-compose.yaml start
 ```
 
 #### Option 2: Kubernetes (For Production/Staging)
@@ -537,14 +537,6 @@ kubectl --namespace platform port-forward svc/signoz-otel-collector 4317:4317
 ```bash
 # For Docker installation
 curl http://localhost:8080/api/v1/health
-
-# For Kubernetes with port-forward
-curl http://localhost:8080/api/v1/health
-```
-
-**Expected response:**
-```json
-{"status":"ok"}
 ```
 
 **Verify OTLP endpoint:**

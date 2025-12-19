@@ -51,8 +51,11 @@ class WikipediaClient:
         url = f"{self.base_url}/page/summary/{topic}"
 
         try:
+            headers = {
+                "User-Agent": "SearchRecommendationService/1.0 (OpenTelemetry Demo; +https://github.com/yourusername/project)"
+            }
             async with httpx.AsyncClient() as client:
-                response = await client.get(url, timeout=self.timeout)
+                response = await client.get(url, timeout=self.timeout, headers=headers)
 
                 if response.status_code == 200:
                     data = response.json()

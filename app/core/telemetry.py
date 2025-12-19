@@ -73,9 +73,9 @@ def instrument_app(app):
     """Apply auto-instrumentation to FastAPI app"""
 
     # FastAPI auto-instrumentation
+    # Note: excluded_urls can cause issues with status code reporting
     FastAPIInstrumentor.instrument_app(
         app,
-        excluded_urls="/health",  # Don't trace health checks
         tracer_provider=trace.get_tracer_provider()
     )
 
