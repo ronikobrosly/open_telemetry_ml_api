@@ -15,10 +15,6 @@ ENV/
 *.swp
 *.swo
 
-# Environment
-.env
-.env.local
-
 # Database
 *.db
 *.sqlite

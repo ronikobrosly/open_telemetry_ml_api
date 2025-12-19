@@ -2,7 +2,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import List
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file='.env', env_file_encoding='utf-8')
+    model_config = SettingsConfigDict(
+        env_file='.env',
+        env_file_encoding='utf-8',
+        protected_namespaces=('settings_',)  # Fix model_ namespace conflict
+    )
 
     # Application
     app_name: str = "Search & Recommendation Service"
@@ -42,8 +46,14 @@ class Settings(BaseSettings):
 
     # OpenTelemetry
     otel_service_name: str = "search-recommendation-service"
-    otel_exporter_endpoint: str = "http://localhost:4317"
-    otel_exporter_protocol: str = "grpc"
+    otel_service_version: str = "1.0.0"
+    otel_deployment_environment: str = "development"
+    otel_exporter_otlp_endpoint: str = "http://localhost:4317"
+    otel_exporter_otlp_protocol: str = "grpc"
+    otel_traces_sampler: str = "always_on"
+    otel_traces_sampler_arg: str = "1.0"
+    otel_metrics_exporter: str = "otlp"
+    otel_metric_export_interval: str = "60000"
 
     @property
     def stopwords_list(self) -> List[str]:

@@ -464,7 +464,7 @@ cd signoz/deploy/
 
 This will:
 - Download and start all SigNoz components (ClickHouse, Query Service, Frontend, OTel Collector)
-- Expose the UI on `http://localhost:3301`
+- Expose the UI on `http://localhost:8080`
 - Expose OTLP gRPC endpoint on `localhost:4317`
 - Expose OTLP HTTP endpoint on `localhost:4318`
 
@@ -483,7 +483,7 @@ docker ps
 ```
 
 **Access SigNoz UI:**
-Open your browser to `http://localhost:3301`
+Open your browser to `http://localhost:8080`
 
 **Stop SigNoz:**
 ```bash
@@ -529,20 +529,6 @@ kubectl --namespace platform port-forward svc/signoz-frontend 3301:3301
 kubectl --namespace platform port-forward svc/signoz-otel-collector 4317:4317
 ```
 
-#### Option 3: SigNoz Cloud (Managed Service)
-
-Sign up at [https://signoz.io/teams/](https://signoz.io/teams/)
-
-You'll receive:
-- Ingestion endpoint (e.g., `ingest.{region}.signoz.cloud:443`)
-- Ingestion key
-
-**Update your `.env`:**
-```bash
-OTEL_EXPORTER_OTLP_ENDPOINT="https://ingest.{region}.signoz.cloud:443"
-OTEL_EXPORTER_OTLP_HEADERS="signoz-access-token=<your-ingestion-key>"
-```
-
 ### Connecting Your Application to SigNoz
 
 #### Step 1: Verify SigNoz is Running
@@ -550,10 +536,10 @@ OTEL_EXPORTER_OTLP_HEADERS="signoz-access-token=<your-ingestion-key>"
 **Check SigNoz health:**
 ```bash
 # For Docker installation
-curl http://localhost:3301/api/v1/health
+curl http://localhost:8080/api/v1/health
 
 # For Kubernetes with port-forward
-curl http://localhost:3301/api/v1/health
+curl http://localhost:8080/api/v1/health
 ```
 
 **Expected response:**
@@ -597,7 +583,7 @@ This includes all OpenTelemetry packages needed to send data to SigNoz.
 
 ```bash
 # From project root
-PYTHONPATH=/home/ronik/open_telemetry_ml_api python app/main.py
+PYTHONPATH=~/Desktop/open_telemetry_ml_api python app/main.py
 ```
 
 **Look for these log messages indicating successful OTel initialization:**

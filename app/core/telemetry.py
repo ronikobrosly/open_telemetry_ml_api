@@ -23,8 +23,8 @@ def setup_telemetry():
     # Define resource attributes
     resource = Resource(attributes={
         SERVICE_NAME: settings.otel_service_name,
-        SERVICE_VERSION: settings.app_version,
-        "deployment.environment": settings.environment,
+        SERVICE_VERSION: settings.otel_service_version,
+        "deployment.environment": settings.otel_deployment_environment,
         "service.namespace": "ml-demo",
     })
 
@@ -33,7 +33,7 @@ def setup_telemetry():
 
     # Use BatchSpanProcessor for production efficiency
     otlp_span_exporter = OTLPSpanExporter(
-        endpoint=settings.otel_exporter_endpoint,
+        endpoint=settings.otel_exporter_otlp_endpoint,
         insecure=True  # Set to False if using TLS
     )
     trace_provider.add_span_processor(
@@ -48,7 +48,7 @@ def setup_telemetry():
 
     # Setup Metrics
     otlp_metric_exporter = OTLPMetricExporter(
-        endpoint=settings.otel_exporter_endpoint,
+        endpoint=settings.otel_exporter_otlp_endpoint,
         insecure=True
     )
     metric_reader = PeriodicExportingMetricReader(
@@ -65,7 +65,7 @@ def setup_telemetry():
         "OpenTelemetry initialized",
         extra={
             "service_name": settings.otel_service_name,
-            "endpoint": settings.otel_exporter_endpoint
+            "endpoint": settings.otel_exporter_otlp_endpoint
         }
     )
 
