@@ -4,3 +4,19 @@ pydantic==2.5.3
 pydantic-settings==2.1.0
 httpx==0.26.0
 python-dotenv==1.0.0
+
+# OpenTelemetry Core
+opentelemetry-api==1.22.0
+opentelemetry-sdk==1.22.0
+
+# Auto-instrumentation
+opentelemetry-instrumentation-fastapi==0.43b0
+opentelemetry-instrumentation-httpx==0.43b0
+opentelemetry-instrumentation-sqlite3==0.43b0
+
+# OTLP Exporter for SigNoz
+opentelemetry-exporter-otlp==1.22.0
+
+# Bootstrap utilities
+opentelemetry-distro==0.43b0
+opentelemetry-instrumentation==0.43b0

@@ -3,6 +3,8 @@ import json
 import time
 import random
 from typing import List
+from opentelemetry import trace
+from app.core.metrics import record_chaos_event
 from app.schemas.internal import SearchIndexResult, ParsedQuery
 from app.core.config import settings
 from app.core.chaos import chaos_manager
@@ -22,8 +24,13 @@ class SearchIndex:
         4. Calculate base_score using BM25 rank (normalized)
         5. Count matching tokens for each result
         """
+        span = trace.get_current_span()
+
         # Chaos injection: slow search
         if chaos_manager.should_trigger_slow_search():
+            span.set_attribute("chaos.triggered", True)
+            span.set_attribute("chaos.event_type", "slow_search")
+            record_chaos_event("slow_search")
             time.sleep(settings.search_slow_threshold_ms / 1000.0)
 
         conn = sqlite3.connect(self.db_path)

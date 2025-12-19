@@ -40,6 +40,11 @@ class Settings(BaseSettings):
     # NLP
     stopwords: str = "the,a,an,and,or,but,in,on,at,to,for,of,with,by,from,as,is,was,are,were,be,been"
 
+    # OpenTelemetry
+    otel_service_name: str = "search-recommendation-service"
+    otel_exporter_endpoint: str = "http://localhost:4317"
+    otel_exporter_protocol: str = "grpc"
+
     @property
     def stopwords_list(self) -> List[str]:
         return [w.strip() for w in self.stopwords.split(',')]

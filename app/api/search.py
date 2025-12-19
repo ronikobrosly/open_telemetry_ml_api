@@ -1,6 +1,14 @@
 from fastapi import APIRouter, Query, HTTPException
 from typing import Optional
 import time
+import logging
+
+from opentelemetry import trace
+from opentelemetry.trace import Status, StatusCode
+from app.core.metrics import (
+    record_search_query, record_model_prediction,
+    record_external_api_call, record_component_duration
+)
 
 from app.schemas.request import SearchRequest, ChaosConfig
 from app.schemas.response import SearchResponse, ResponseMeta, HealthResponse, ChaosConfigResponse
@@ -16,6 +24,9 @@ from app.recommendation.features import FeatureBuilder
 from app.recommendation.model import MockMLModel
 from app.recommendation.errors import ModelError
 from app.external.wikipedia import WikipediaClient
+
+logger = logging.getLogger(__name__)
+tracer = trace.get_tracer(__name__)
 
 router = APIRouter()
 
@@ -47,39 +58,105 @@ async def search(
     components_called = []
 
     # 1. Parse query
-    parsed_query = query_parser.parse(q)
-    components_called.append("query_parser")
+    with tracer.start_as_current_span("query_parser.parse") as span:
+        span.set_attribute("query.length", len(q))
+        component_start = time.time()
+
+        parsed_query = query_parser.parse(q)
+
+        span.set_attribute("query.token_count", parsed_query.token_count)
+        span.set_attribute("query.intent", parsed_query.intent.value)
+        components_called.append("query_parser")
+
+        component_duration = (time.time() - component_start) * 1000
+        record_component_duration("query_parser", component_duration)
+        record_search_query(parsed_query.intent.value)
 
     # 2. Search index
-    search_results = search_index.search(parsed_query, limit=limit)
-    components_called.append("search_index")
+    with tracer.start_as_current_span("search_index.search") as span:
+        span.set_attribute("search.limit", limit)
+        component_start = time.time()
 
-    # 3. Get ML predictions for each result
+        search_results = search_index.search(parsed_query, limit=limit)
+
+        span.set_attribute("search.result_count", len(search_results))
+        components_called.append("search_index")
+
+        component_duration = (time.time() - component_start) * 1000
+        record_component_duration("search_index", component_duration)
+
+    # 3. ML predictions (per-document spans)
     model_predictions = {}
-    for doc in search_results:
-        try:
-            features = feature_builder.build_features(parsed_query, doc, user_id)
-            prediction = ml_model.predict(features)
-            model_predictions[doc.doc_id] = prediction
-            if "recommendation_engine" not in components_called:
-                components_called.append("recommendation_engine")
-        except ModelError:
-            # Continue without prediction for this document
-            pass
+    successful_predictions = 0
+    failed_predictions = 0
 
-    # 4. Fetch external signal
+    with tracer.start_as_current_span("recommendation_engine") as batch_span:
+        for doc in search_results:
+            prediction_start = time.time()
+
+            with tracer.start_as_current_span("model.predict") as pred_span:
+                pred_span.set_attribute("doc_id", doc.doc_id)
+                pred_span.set_attribute("model.version", ml_model.version)
+
+                try:
+                    features = feature_builder.build_features(parsed_query, doc, user_id)
+                    prediction = ml_model.predict(features)
+
+                    pred_span.set_attribute("model.score", prediction.score)
+                    pred_span.set_attribute("model.confidence", prediction.confidence)
+
+                    model_predictions[doc.doc_id] = prediction
+                    successful_predictions += 1
+
+                    prediction_duration = (time.time() - prediction_start) * 1000
+                    record_model_prediction("success", prediction_duration, prediction.score)
+
+                    if "recommendation_engine" not in components_called:
+                        components_called.append("recommendation_engine")
+
+                except ModelError as e:
+                    pred_span.record_exception(e)
+                    pred_span.set_status(Status(StatusCode.ERROR, str(e)))
+                    failed_predictions += 1
+
+                    prediction_duration = (time.time() - prediction_start) * 1000
+                    record_model_prediction("failure", prediction_duration)
+
+                    logger.warning("Model prediction failed", extra={
+                        "doc_id": doc.doc_id,
+                        "error": str(e)
+                    })
+
+        batch_span.set_attribute("model.predictions.successful", successful_predictions)
+        batch_span.set_attribute("model.predictions.failed", failed_predictions)
+
+    # 4. Wikipedia API
     external_signal = None
-    try:
-        external_signal = await wikipedia_client.get_signal(parsed_query)
-        if external_signal:
-            components_called.append("wikipedia_api")
-    except Exception:
-        # Continue without external signal
-        pass
+    with tracer.start_as_current_span("wikipedia_client.get_signal") as span:
+        try:
+            external_signal = await wikipedia_client.get_signal(parsed_query)
+            if external_signal:
+                span.set_attribute("external.source", "wikipedia")
+                span.set_attribute("external.relevance_score", external_signal.relevance_score)
+                components_called.append("wikipedia_api")
+                record_external_api_call("wikipedia", "success")
+        except Exception as e:
+            span.record_exception(e)
+            span.set_status(Status(StatusCode.ERROR, str(e)))
+            record_external_api_call("wikipedia", "failure")
+            logger.warning("Wikipedia API failed", extra={"error": str(e)})
 
-    # 5. Rank results
-    ranked_results = ranker.rank(search_results, model_predictions, external_signal)
-    components_called.append("ranker")
+    # 5. Ranker
+    with tracer.start_as_current_span("ranker.rank") as span:
+        component_start = time.time()
+
+        ranked_results = ranker.rank(search_results, model_predictions, external_signal)
+
+        span.set_attribute("ranking.result_count", len(ranked_results))
+        components_called.append("ranker")
+
+        component_duration = (time.time() - component_start) * 1000
+        record_component_duration("ranker", component_duration)
 
     # Calculate latency
     latency_ms = int((time.time() - start_time) * 1000)

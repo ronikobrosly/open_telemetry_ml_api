@@ -1,9 +1,14 @@
 import httpx
 import asyncio
+import logging
 from typing import Optional
+from opentelemetry import trace
+from app.core.metrics import record_chaos_event
 from app.schemas.internal import ExternalSignal, ParsedQuery
 from app.core.config import settings
 from app.core.chaos import chaos_manager
+
+logger = logging.getLogger(__name__)
 
 class WikipediaClient:
     def __init__(self):
@@ -22,17 +27,26 @@ class WikipediaClient:
         4. Calculate relevance score based on extract length and view count proxy
         5. Return signal or None if failed
         """
+        span = trace.get_current_span()
+
         # Chaos injection: external API failure
         if chaos_manager.should_trigger_external_failure():
+            span.set_attribute("chaos.triggered", True)
+            span.set_attribute("chaos.event_type", "external_failure")
+            record_chaos_event("external_failure")
             raise httpx.HTTPError("Simulated external API failure")
 
         # Chaos injection: timeout
         if chaos_manager.should_trigger_external_timeout():
+            span.set_attribute("chaos.triggered", True)
+            span.set_attribute("chaos.event_type", "external_timeout")
+            record_chaos_event("external_timeout")
             await asyncio.sleep(settings.wikipedia_timeout + 1)
             raise httpx.TimeoutException("Simulated timeout")
 
         # Extract topic (use first meaningful token)
         topic = parsed_query.tokens[0] if parsed_query.tokens else "search"
+        span.set_attribute("external.topic", topic)
 
         url = f"{self.base_url}/page/summary/{topic}"
 
@@ -56,6 +70,9 @@ class WikipediaClient:
                     if 'pageviews' in data:
                         popularity_proxy = min(data['pageviews'] / 10000.0, 1.0)
 
+                    span.set_attribute("external.status", "success")
+                    span.set_attribute("external.relevance_score", relevance_score)
+
                     return ExternalSignal(
                         source="wikipedia",
                         relevance_score=relevance_score,
@@ -66,6 +83,9 @@ class WikipediaClient:
                     return None
 
         except (httpx.TimeoutException, httpx.HTTPError) as e:
-            # Log error (in production, use proper logging)
-            print(f"Wikipedia API error: {e}")
+            logger.warning("Wikipedia API error", extra={
+                "topic": topic,
+                "error": str(e),
+                "error_type": type(e).__name__
+            })
             return None

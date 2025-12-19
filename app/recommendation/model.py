@@ -1,6 +1,9 @@
 import random
 import time
 import math
+from opentelemetry import trace
+from opentelemetry.trace import Status, StatusCode
+from app.core.metrics import record_chaos_event
 from app.schemas.internal import FeatureVector, ModelPrediction
 from app.recommendation.errors import ModelError, ModelTimeoutError
 from app.core.chaos import chaos_manager
@@ -35,8 +38,14 @@ class MockMLModel:
             ModelError: Random inference failure (5% default)
             ModelTimeoutError: Simulated timeout (rare)
         """
+        span = trace.get_current_span()
+        inference_start = time.time()
+
         # Chaos injection: model failure
         if chaos_manager.should_trigger_model_failure():
+            span.set_attribute("chaos.triggered", True)
+            span.set_attribute("chaos.event_type", "model_failure")
+            record_chaos_event("model_failure")
             raise ModelError("Model inference failed: simulated error")
 
         # Simulate inference time (10-50ms normally, with rare timeouts)
@@ -76,6 +85,10 @@ class MockMLModel:
 
         # Confidence: higher for extreme scores
         confidence = abs(score - 0.5) * 2.0
+
+        # Record inference time in span
+        actual_inference_time_ms = (time.time() - inference_start) * 1000
+        span.set_attribute("model.inference_time_ms", actual_inference_time_ms)
 
         return ModelPrediction(
             score=score,
