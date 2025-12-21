@@ -1,0 +1,67 @@
+digraph SearchRecommendationService {
+    // Graph settings
+    rankdir=TB;
+    node [shape=box, style=filled, fillcolor=lightblue, fontname="Arial", fontsize=11];
+    edge [fontname="Arial", fontsize=10];
+
+    // Client request
+    client_request [label="Client\nGET /search?q=machine+learning&user_id=123", shape=ellipse, fillcolor=lightgreen, fontsize=12];
+
+    // 1. Query Parser
+    query_parser [label="Query Parser\n\n• Normalize (lowercase)\n• Tokenize\n• Remove stopwords\n• Detect intent", fillcolor="#E3F2FD"];
+    parsed_query [label="Parsed Query\ntokens: [machine, learning]\nintent: search", shape=note, fillcolor="#FFF9C4"];
+
+    // 2. Search Index
+    search_index [label="Search Index (SQLite)\n\n• Build FTS5 query\n• Execute BM25 search\n• Calculate base scores\n• Return top results", fillcolor="#E8F5E9"];
+    search_results [label="Search Results\n[{doc_id, title, text, base_score}, ...]", shape=note, fillcolor="#FFF9C4"];
+
+    // 3. Recommendation Engine
+    rec_engine [label="Recommendation Engine\n(for each document)", fillcolor="#FCE4EC", fontsize=12, style="filled,bold"];
+
+    // 3a. Feature Builder
+    feature_builder [label="Feature Builder\n\n• Query features (length, tokens)\n• User features (user_id hash)\n• Document features (length, category)\n• Calculate overlap (Jaccard)\n• Generate embeddings\n• Compute dot product", fillcolor="#F3E5F5"];
+    features [label="Feature Vector\n{query_length, overlap,\nembedding_similarity, ...}", shape=note, fillcolor="#FFF9C4"];
+
+    // 3b. ML Model
+    ml_model [label="ML Model (Mock)\n\n• Weighted feature combination\n• Sigmoid transformation\n• Generate confidence score", fillcolor="#E1BEE7"];
+    predictions [label="Model Predictions\n{doc_id → score, confidence}", shape=note, fillcolor="#FFF9C4"];
+
+    // 4. Wikipedia API
+    wikipedia [label="Wikipedia API\n\n• Extract primary topic\n• HTTP GET request\n• Parse response\n• Calculate relevance score", fillcolor="#E0F7FA"];
+    external_signal [label="External Signal\n{source, relevance_score}", shape=note, fillcolor="#FFF9C4"];
+
+    // 5. Ranker
+    ranker [label="Ranker\n\n• Combine scores:\n  50% search score\n  30% recommendation score\n  20% external signal\n• Sort by final score", fillcolor="#FFF3E0"];
+    ranked_results [label="Ranked Results\n[{doc_id, title, score, explanations}, ...]", shape=note, fillcolor="#FFF9C4"];
+
+    // 6. Response
+    response_builder [label="Response Builder\n\n• Assemble SearchResponse\n• Add metadata (latency, components)\n• Format as JSON", fillcolor="#F1F8E9"];
+    client_response [label="Client\nJSON Response", shape=ellipse, fillcolor=lightgreen, fontsize=12];
+
+    // Main flow
+    client_request -> query_parser;
+    query_parser -> parsed_query;
+    parsed_query -> search_index;
+    search_index -> search_results;
+
+    search_results -> rec_engine;
+    rec_engine -> feature_builder;
+    feature_builder -> features;
+    features -> ml_model;
+    ml_model -> predictions;
+
+    search_results -> wikipedia [label="  (in parallel)  ", style=dashed];
+    wikipedia -> external_signal;
+
+    predictions -> ranker;
+    search_results -> ranker;
+    external_signal -> ranker;
+
+    ranker -> ranked_results;
+    ranked_results -> response_builder;
+    parsed_query -> response_builder [style=dashed, label="  metadata  "];
+    response_builder -> client_response;
+
+    // Layout hints
+    {rank=same; rec_engine; wikipedia}
+}

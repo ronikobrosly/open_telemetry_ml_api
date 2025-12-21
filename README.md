@@ -2,6 +2,43 @@
 
 A demo-friendly FastAPI microservice designed to showcase the value of OpenTelemetry (OTel). This service combines full-text search, ML-based recommendations, and external API signals to rank documents, with built-in chaos engineering capabilities.
 
+The final scores are calculated this way:
+
+1. Search Score (50% weight)
+
+- Source: Search Index using SQLite FTS5 (Full-Text Search)
+- Location: app/search/index.py
+- Algorithm:
+  - Uses BM25 ranking algorithm from the FTS5 search
+  - Normalized to [0, 1] range using sigmoid transformation: 1.0 / (1.0 + abs(bm25_rank))
+  - Also counts how many query tokens match in the document text
+
+2. Recommendation Score (30% weight)
+
+- Source: Mock ML Model (simulates a real recommendation engine)
+- Location: app/recommendation/model.py
+- Algorithm:
+  - Builds feature vectors including:
+      - Query-document overlap (Jaccard similarity)
+    - Embedding dot product (similarity between query and document embeddings)
+    - Query token count
+    - Document category encoding
+    - Derived "match quality" feature
+  - Computes weighted sum of these features
+  - Applies sigmoid transformation
+  - Adds deterministic noise based on feature hash
+  - Output is a score in [0, 1] range
+
+3. External Score (20% weight)
+
+- Source: Wikipedia REST API (real external HTTP call)
+- Location: app/external/wikipedia.py
+- Algorithm:
+  - Fetches Wikipedia page summary for the primary query topic
+  - Calculates relevance based on extract length: min(description_length / 500.0, 1.0)
+  - Optionally includes popularity proxy from page view data
+  - Returns score in [0, 1] range
+
 ## Overview
 
 This service demonstrates:

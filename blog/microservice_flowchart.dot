@@ -1,0 +1,205 @@
+digraph SearchRecommendationService {
+    // Graph settings
+    rankdir=TB;
+    node [shape=box, style=filled, fillcolor=lightblue, fontname="Arial", fontsize=10];
+    edge [fontname="Arial", fontsize=9];
+
+    // Color scheme
+    node [fillcolor=lightblue];  // Default: processing nodes
+
+    // Client and Entry
+    client [label="Client", shape=ellipse, fillcolor=lightgreen];
+    entry [label="GET /search\nParams: q, user_id, limit", fillcolor=lightyellow];
+
+    // Main components
+    subgraph cluster_query_parser {
+        label="Query Parser";
+        style=filled;
+        fillcolor=lightgrey;
+
+        qp_normalize [label="Normalize Query\n(lowercase, strip)"];
+        qp_tokenize [label="Tokenize\n(regex split)"];
+        qp_stopwords [label="Remove Stopwords"];
+        qp_intent [label="Detect Intent\n(search vs discovery)"];
+        qp_output [label="ParsedQuery Object\n{tokens, intent, normalized}", shape=note, fillcolor=lightyellow];
+    }
+
+    subgraph cluster_search_index {
+        label="Search Index (SQLite)";
+        style=filled;
+        fillcolor=lightgrey;
+
+        chaos_slow [label="Chaos: Slow Search?", shape=diamond, fillcolor=orange];
+        slow_delay [label="Inject Delay\n(500ms)", fillcolor=orange];
+        fts_query [label="Build FTS5 Query\n(OR tokens)"];
+        fts_execute [label="Execute SQLite FTS\n(BM25 ranking)"];
+        calc_score [label="Calculate Base Score\n(normalize BM25)"];
+        count_matches [label="Count Token Matches"];
+        search_output [label="SearchIndexResult[]\n{doc_id, title, text,\nbase_score, match_count}", shape=note, fillcolor=lightyellow];
+    }
+
+    subgraph cluster_recommendation {
+        label="Recommendation Engine";
+        style=filled;
+        fillcolor=lightgrey;
+
+        rec_loop [label="For Each Document", shape=hexagon, fillcolor=lightcyan];
+
+        subgraph cluster_features {
+            label="Feature Builder";
+            style=dashed;
+
+            feat_query [label="Extract Query Features\n(length, token_count)"];
+            feat_user [label="Extract User Features\n(user_id hash)"];
+            feat_doc [label="Extract Doc Features\n(length, category)"];
+            feat_db [label="Fetch from DB\n(embedding, category)"];
+            feat_overlap [label="Calculate Overlap\n(Jaccard similarity)"];
+            feat_embedding [label="Generate Query Embedding\n(hash-based)"];
+            feat_dot [label="Embedding Dot Product"];
+            feat_output [label="FeatureVector", shape=note, fillcolor=lightyellow];
+        }
+
+        subgraph cluster_model {
+            label="Mock ML Model";
+            style=dashed;
+
+            chaos_model [label="Chaos: Model Failure?", shape=diamond, fillcolor=orange];
+            model_fail [label="Raise ModelError", fillcolor=red];
+            model_inference [label="Inference Time\n(10-50ms)"];
+            model_compute [label="Weighted Feature Sum\n+ Sigmoid Transform"];
+            model_noise [label="Add Deterministic Noise"];
+            model_confidence [label="Calculate Confidence"];
+            model_output [label="ModelPrediction\n{score, confidence}", shape=note, fillcolor=lightyellow];
+        }
+
+        handle_error [label="Catch ModelError\nLog & Continue", fillcolor=yellow];
+        rec_collect [label="Collect Predictions\nper doc_id", shape=cylinder, fillcolor=lightcyan];
+    }
+
+    subgraph cluster_wikipedia {
+        label="External Signals (Wikipedia API)";
+        style=filled;
+        fillcolor=lightgrey;
+
+        wiki_topic [label="Extract Primary Topic\n(first token)"];
+        chaos_wiki_fail [label="Chaos: API Failure?", shape=diamond, fillcolor=orange];
+        chaos_wiki_timeout [label="Chaos: Timeout?", shape=diamond, fillcolor=orange];
+        wiki_fail [label="Raise HTTPError", fillcolor=red];
+        wiki_timeout [label="Sleep > timeout", fillcolor=red];
+        wiki_call [label="HTTP GET\nWikipedia API\n/page/summary/{topic}"];
+        wiki_response [label="Status 200?", shape=diamond];
+        wiki_extract [label="Extract Data\n(description, length)"];
+        wiki_score [label="Calculate Relevance\n(length / 500)"];
+        wiki_output [label="ExternalSignal\n{source, relevance_score,\ndescription_length}", shape=note, fillcolor=lightyellow];
+        wiki_error [label="Catch Exception\nLog & Continue", fillcolor=yellow];
+        wiki_none [label="No Signal", fillcolor=lightgray];
+    }
+
+    subgraph cluster_ranker {
+        label="Ranker";
+        style=filled;
+        fillcolor=lightgrey;
+
+        rank_combine [label="Combine Scores\n0.5*search + 0.3*rec + 0.2*ext"];
+        rank_explanation [label="Build ScoreExplanation\nper document"];
+        rank_sort [label="Sort by Final Score\n(descending)"];
+        rank_output [label="SearchResult[]\n{doc_id, title, score,\nexplanations}", shape=note, fillcolor=lightyellow];
+    }
+
+    // Response
+    response_meta [label="Build ResponseMeta\n{latency_ms, components_called}"];
+    response [label="SearchResponse\n{query, parsed_query,\nresults, meta}", shape=note, fillcolor=lightgreen];
+    client_response [label="JSON Response", shape=ellipse, fillcolor=lightgreen];
+
+    // Flow connections
+    client -> entry;
+
+    // Query Parser flow
+    entry -> qp_normalize;
+    qp_normalize -> qp_tokenize;
+    qp_tokenize -> qp_stopwords;
+    qp_stopwords -> qp_intent;
+    qp_intent -> qp_output;
+
+    // Search Index flow
+    qp_output -> chaos_slow;
+    chaos_slow -> slow_delay [label="Yes (20%)"];
+    chaos_slow -> fts_query [label="No (80%)"];
+    slow_delay -> fts_query;
+    fts_query -> fts_execute;
+    fts_execute -> calc_score;
+    calc_score -> count_matches;
+    count_matches -> search_output;
+
+    // Recommendation Engine flow
+    search_output -> rec_loop;
+    rec_loop -> feat_query;
+
+    // Feature Builder
+    feat_query -> feat_user;
+    feat_user -> feat_doc;
+    feat_doc -> feat_db;
+    feat_db -> feat_overlap;
+    feat_overlap -> feat_embedding;
+    feat_embedding -> feat_dot;
+    feat_dot -> feat_output;
+
+    // ML Model
+    feat_output -> chaos_model;
+    chaos_model -> model_fail [label="Yes (5%)"];
+    chaos_model -> model_inference [label="No (95%)"];
+    model_fail -> handle_error;
+    model_inference -> model_compute;
+    model_compute -> model_noise;
+    model_noise -> model_confidence;
+    model_confidence -> model_output;
+    model_output -> rec_collect;
+    handle_error -> rec_collect [label="Continue\nwithout prediction"];
+
+    rec_collect -> rec_loop [label="Next Document", style=dashed];
+    rec_collect -> wiki_topic [label="All Documents\nProcessed"];
+
+    // Wikipedia API flow
+    wiki_topic -> chaos_wiki_fail;
+    chaos_wiki_fail -> wiki_fail [label="Yes (5%)"];
+    chaos_wiki_fail -> chaos_wiki_timeout [label="No"];
+    chaos_wiki_timeout -> wiki_timeout [label="Yes (10%)"];
+    chaos_wiki_timeout -> wiki_call [label="No"];
+    wiki_fail -> wiki_error;
+    wiki_timeout -> wiki_error;
+    wiki_call -> wiki_response;
+    wiki_response -> wiki_extract [label="Yes"];
+    wiki_response -> wiki_none [label="No"];
+    wiki_extract -> wiki_score;
+    wiki_score -> wiki_output;
+    wiki_output -> rank_combine;
+    wiki_error -> rank_combine [label="signal = None"];
+    wiki_none -> rank_combine [label="signal = None"];
+
+    // Ranker flow
+    rec_collect -> rank_combine;
+    rank_combine -> rank_explanation;
+    rank_explanation -> rank_sort;
+    rank_sort -> rank_output;
+
+    // Response building
+    rank_output -> response_meta;
+    qp_output -> response_meta [style=dotted, label="metadata"];
+    response_meta -> response;
+    response -> client_response;
+    client_response -> client;
+
+    // Legend
+    subgraph cluster_legend {
+        label="Legend";
+        style=filled;
+        fillcolor=white;
+
+        leg_process [label="Processing Step", fillcolor=lightblue];
+        leg_decision [label="Decision Point", shape=diamond, fillcolor=orange];
+        leg_data [label="Data Structure", shape=note, fillcolor=lightyellow];
+        leg_error [label="Error Handling", fillcolor=yellow];
+        leg_failure [label="Failure/Exception", fillcolor=red];
+        leg_io [label="Input/Output", shape=ellipse, fillcolor=lightgreen];
+    }
+}
