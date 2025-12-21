@@ -57,6 +57,12 @@ async def search(
     start_time = time.time()
     components_called = []
 
+    # Add user_id to the root span for filtering in SigNoz
+    current_span = trace.get_current_span()
+    current_span.set_attribute("user_id", user_id)
+    current_span.set_attribute("query", q)
+    current_span.set_attribute("limit", limit)
+
     # 1. Parse query
     with tracer.start_as_current_span("query_parser.parse") as span:
         span.set_attribute("query.length", len(q))

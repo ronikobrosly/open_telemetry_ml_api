@@ -1045,32 +1045,3 @@ GET /search [200 OK, 189ms]
 
 **Hybrid Instrumentation**: Auto-instrumentation for infrastructure (HTTP, DB, external calls), manual for business logic (ML, ranking).
 
-## Files to Modify
-
-| File | Type | Lines | Priority |
-|------|------|-------|----------|
-| `requirements.txt` | MODIFY | +8 | HIGH |
-| `.env` | MODIFY | +15 | HIGH |
-| `app/core/config.py` | MODIFY | +10 | HIGH |
-| `app/core/telemetry.py` | NEW | ~100 | HIGH |
-| `app/core/logging.py` | NEW | ~50 | MEDIUM |
-| `app/core/tracing.py` | NEW | ~80 | MEDIUM |
-| `app/core/metrics.py` | NEW | ~120 | MEDIUM |
-| `app/main.py` | MODIFY | +15 | HIGH |
-| `app/api/search.py` | MODIFY | +80 | HIGH |
-| `app/recommendation/model.py` | MODIFY | +20 | HIGH |
-| `app/external/wikipedia.py` | MODIFY | +15 | MEDIUM |
-
-Full plan details: `/home/ronik/.claude/plans/replicated-leaping-hopper.md`
-
-## What This Demonstrates
-
-This instrumentation showcases:
-✅ **Fine-grain distributed tracing** across all 6 components
-✅ **ML model observability** with scores, confidence, failures
-✅ **Error pinpointing** through exception recording and chaos events
-✅ **Log-trace correlation** via automatic trace context injection
-✅ **Production-ready patterns** with batching, sampling, metrics
-✅ **Chaos engineering visibility** showing graceful degradation
-
-Perfect for demonstrating OpenTelemetry's value in ML systems!
