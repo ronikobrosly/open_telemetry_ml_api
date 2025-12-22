@@ -1,6 +1,7 @@
 import random
 import time
 import math
+import logging
 from opentelemetry import trace
 from opentelemetry.trace import Status, StatusCode
 from app.core.metrics import record_chaos_event
@@ -8,6 +9,8 @@ from app.schemas.internal import FeatureVector, ModelPrediction
 from app.recommendation.errors import ModelError, ModelTimeoutError
 from app.core.chaos import chaos_manager
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 class MockMLModel:
     """
@@ -41,11 +44,22 @@ class MockMLModel:
         span = trace.get_current_span()
         inference_start = time.time()
 
+        # Add feature attributes to span
+        span.set_attribute("model.version", self.version)
+        span.set_attribute("features.query_length", features.query_length)
+        span.set_attribute("features.query_token_count", features.query_token_count)
+        span.set_attribute("features.user_id_hash", features.user_id_hash)
+        span.set_attribute("features.doc_length", features.doc_length)
+        span.set_attribute("features.doc_category_encoded", features.doc_category_encoded)
+        span.set_attribute("features.query_doc_overlap", round(features.query_doc_overlap, 3))
+        span.set_attribute("features.embedding_dot_product", round(features.embedding_dot_product, 3))
+
         # Chaos injection: model failure
         if chaos_manager.should_trigger_model_failure():
             span.set_attribute("chaos.triggered", True)
             span.set_attribute("chaos.event_type", "model_failure")
             record_chaos_event("model_failure")
+            logger.warning("Chaos: model failure")
             raise ModelError("Model inference failed: simulated error")
 
         # Simulate inference time (10-50ms normally, with rare timeouts)
@@ -57,6 +71,7 @@ class MockMLModel:
         # Feature engineering: derive match_quality
         match_quality = (features.query_doc_overlap +
                         max(0, features.embedding_dot_product)) / 2.0
+        span.set_attribute("features.match_quality", round(match_quality, 3))
 
         # Compute weighted score
         score = (
@@ -86,9 +101,18 @@ class MockMLModel:
         # Confidence: higher for extreme scores
         confidence = abs(score - 0.5) * 2.0
 
-        # Record inference time in span
+        # Record inference time and results in span
         actual_inference_time_ms = (time.time() - inference_start) * 1000
-        span.set_attribute("model.inference_time_ms", actual_inference_time_ms)
+        span.set_attribute("model.inference_time_ms", round(actual_inference_time_ms, 2))
+        span.set_attribute("model.prediction_score", round(score, 3))
+        span.set_attribute("model.prediction_confidence", round(confidence, 3))
+        span.set_attribute("model.raw_score_before_sigmoid", round(
+            self.feature_weights['query_doc_overlap'] * features.query_doc_overlap +
+            self.feature_weights['embedding_dot_product'] * max(0, features.embedding_dot_product) +
+            self.feature_weights['query_token_count'] * min(features.query_token_count / 10.0, 1.0) +
+            self.feature_weights['doc_category_encoded'] * (features.doc_category_encoded / 4.0) +
+            self.feature_weights['match_quality'] * match_quality, 3
+        ))
 
         return ModelPrediction(
             score=score,
